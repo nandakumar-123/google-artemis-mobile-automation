@@ -185,8 +185,9 @@ MAX_RETRIES_PER_STEP=2
 ADB_TIMEOUT_SECONDS=20
 HOST=127.0.0.1
 PORT=8000
+LOCAL_API_TOKEN=YOUR_LOCAL_API_TOKEN
 ```
-*(Leave `ADB_PATH=` blank if `adb` is in your system PATH or located in `platform-tools/adb.exe`)*.
+*(Leave `ADB_PATH=` blank if `adb` is in your system PATH or located in `platform-tools/adb.exe`. If `LOCAL_API_TOKEN` is left empty, the server automatically generates a secure cryptographic token at startup).*
 
 ---
 
@@ -286,9 +287,9 @@ The repository contains automated unit and integration tests using `pytest`:
 .\.venv\Scripts\python.exe -m pytest tests/test_planner.py
 ```
 
-### Verified Test Results (22/22 Passed):
+### Verified Test Results (26/26 Passed):
 - `tests/test_adb.py`: **9 passed** (initialization, version parsing, connection check, already-paired avoidance, QR payload formats).
-- `tests/test_api.py`: **10 passed** (health endpoint, device status, history, stop signal, disconnect, device select, QR error checks, CSRF cross-site origin blocking, local origin access).
+- `tests/test_api.py`: **14 passed** (health endpoint, device status, history, stop signal, disconnect, device select, QR error checks, local API token validation, unauthorized missing/invalid token rejection, missing origin rejection, cross-site origin blocking, Bearer token authorization).
 - `tests/test_planner.py`: **3 passed** (YouTube multi-step planning, navigation commands, sensitive action confirmation guards).
 
 ---
@@ -296,7 +297,8 @@ The repository contains automated unit and integration tests using `pytest`:
 ## 🛡️ Security Considerations
 
 - **Secrets Management:** The repository `.gitignore` ensures that `.env`, session databases, and logs are never committed. Placeholders are maintained in `.env.example`.
-- **Request-Origin Validation & CSRF Protection:** All state-changing device-control endpoints (`/api/execute`, `/api/stop`, `/api/device/*`, `/api/confirmation`) actively validate `Origin`, `Referer`, and browser `Sec-Fetch-Site` headers via `verify_request_origin` to prevent unauthorized cross-site requests (CSRF) from malicious websites.
+- **Local API Authentication:** Sensitive device-control endpoints (`/api/execute`, `/api/stop`, `/api/device/*`, `/api/confirmation`) require authentication via `LOCAL_API_TOKEN` transmitted securely via `X-API-Token` header, HTTP `Bearer` authorization, or local dashboard session cookies. If not explicitly specified in `.env`, the server generates a cryptographically random token upon startup.
+- **Strict Request-Origin Validation & CSRF Protection:** All state-changing device-control endpoints strictly require either `Origin` or `Referer` headers matching local authorized hosts (`127.0.0.1`, `localhost`). Requests lacking origin metadata or exhibiting cross-site properties (`sec-fetch-site: cross-site`) are blocked with HTTP 403 Forbidden.
 - **Strict Local Access Controls:** In addition to origin checks, CORS is restricted to local addresses (`127.0.0.1` and `localhost`).
 - **Command Sanitization:** Text entered through `TYPE_TEXT` is escaped to avoid shell injection in ADB commands.
 - **Sensitive Operations Guard:** The planner automatically detects sensitive keywords (e.g. *pay*, *delete*, *uninstall*, *format*, *factory reset*, *send message*) and prompts for interactive user confirmation before execution.

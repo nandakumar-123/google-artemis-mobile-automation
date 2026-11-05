@@ -6,6 +6,21 @@ const executeBtn = document.getElementById('executeBtn');
 const stopBtn = document.getElementById('stopBtn');
 const clearBtn = document.getElementById('clearBtn');
 
+// Local session authentication helper
+function getLocalApiToken() {
+  const match = document.cookie.match(new RegExp('(^| )artemis_session_token=([^;]+)'));
+  return match ? match[2] : '';
+}
+
+function authHeaders(extraHeaders = {}) {
+  const headers = { ...extraHeaders };
+  const token = getLocalApiToken();
+  if (token) {
+    headers['X-API-Token'] = token;
+  }
+  return headers;
+}
+
 const backendText = document.getElementById('backendText');
 const geminiBadge = document.getElementById('geminiBadge');
 const geminiText = document.getElementById('geminiText');
@@ -214,7 +229,7 @@ deviceSelector.addEventListener('change', async (e) => {
   try {
     const res = await fetch('/api/device/select', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ serial: chosen })
     });
     const result = await res.json();
@@ -289,7 +304,7 @@ async function onScanSuccess(decodedText) {
   try {
     const res = await fetch('/api/device/pair-qr', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ qr_payload: decodedText, phone_ip: fallbackIp })
     });
     const result = await res.json();
@@ -356,7 +371,7 @@ pairCodeBtn.addEventListener('click', async () => {
   try {
     const res = await fetch('/api/device/pair', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ ip, port, code })
     });
     const result = await res.json();
@@ -393,7 +408,7 @@ connectBtn.addEventListener('click', async () => {
   try {
     const res = await fetch('/api/device/connect', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ ip, port })
     });
     const result = await res.json();
@@ -414,7 +429,7 @@ disconnectBtn.addEventListener('click', async () => {
   try {
     const res = await fetch('/api/device/disconnect', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({})
     });
     const result = await res.json();
@@ -490,7 +505,7 @@ commandForm.addEventListener('submit', async (e) => {
   try {
     const res = await fetch('/api/execute', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ instruction })
     });
     const result = await res.json();
@@ -518,7 +533,10 @@ commandForm.addEventListener('submit', async (e) => {
 stopBtn.addEventListener('click', async () => {
   try {
     stopProgressPolling();
-    const res = await fetch('/api/stop', { method: 'POST' });
+    const res = await fetch('/api/stop', {
+      method: 'POST',
+      headers: authHeaders()
+    });
     const data = await res.json();
     appendMessage(`🛑 ${data.message}`, 'assistant');
     executeBtn.disabled = false;
@@ -547,7 +565,7 @@ confirmApproveBtn.addEventListener('click', async () => {
     pendingTaskId = null;
     const res = await fetch('/api/confirmation', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ task_id: tId, approved: true })
     });
     const result = await res.json();
@@ -565,7 +583,7 @@ confirmRejectBtn.addEventListener('click', async () => {
     pendingTaskId = null;
     const res = await fetch('/api/confirmation', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ task_id: tId, approved: false })
     });
     const result = await res.json();

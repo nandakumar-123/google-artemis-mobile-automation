@@ -1,4 +1,5 @@
 import os
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -24,6 +25,10 @@ MAX_RETRIES_PER_STEP = int(os.getenv("MAX_RETRIES_PER_STEP", "2"))
 ADB_TIMEOUT_SECONDS = int(os.getenv("ADB_TIMEOUT_SECONDS", "25"))
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))
+
+# Local API authentication token
+_configured_token = os.getenv("LOCAL_API_TOKEN", "").strip()
+LOCAL_API_TOKEN = _configured_token if _configured_token else secrets.token_hex(32)
 
 # Paths
 DATA_DIR = BASE_DIR / "data"

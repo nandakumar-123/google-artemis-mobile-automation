@@ -1,11 +1,12 @@
 import os
+import hmac
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from app.config import FRONTEND_DIR, SCREENSHOTS_DIR, HOST, PORT
+from app.config import FRONTEND_DIR, SCREENSHOTS_DIR, HOST, PORT, LOCAL_API_TOKEN
 from app.device_controller import DeviceController
 from app.database import init_db, get_task_history
 from app.schemas import (
@@ -47,9 +48,9 @@ app.add_middleware(
 
 def verify_request_origin(request: Request):
     """
-    Validates request origin and host to prevent Cross-Site Request Forgery (CSRF)
-    and unauthorized external origin requests against device-control API endpoints.
-    Protects both web browsers (evaluating Origin/Referer/Sec-Fetch-Site) and direct clients.
+    Validates request origin and referer to prevent Cross-Site Request Forgery (CSRF).
+    Rejects requests where both Origin and Referer headers are missing or invalid
+    for browser-facing state-changing requests.
     """
     origin = request.headers.get("origin")
     referer = request.headers.get("referer")
@@ -60,6 +61,13 @@ def verify_request_origin(request: Request):
         raise HTTPException(
             status_code=403,
             detail="Forbidden: Cross-site request blocked by origin policy."
+        )
+
+    # Require either Origin or Referer header
+    if not origin and not referer:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Origin or Referer header is required for state-changing operations."
         )
 
     # Validate Origin header if present
@@ -86,6 +94,31 @@ def verify_request_origin(request: Request):
 
     return True
 
+def verify_api_token(request: Request):
+    """
+    Validates local API token for sensitive device-control actions.
+    Accepts token via 'X-API-Token' header, 'Authorization: Bearer <token>',
+    or session cookie 'artemis_session_token' set by the local server dashboard.
+    """
+    token = request.headers.get("X-API-Token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+    if not token:
+        token = request.cookies.get("artemis_session_token")
+
+    if not token or not hmac.compare_digest(token, LOCAL_API_TOKEN):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Missing or invalid API token."
+        )
+    return token
+
+def verify_security(request: Request, _origin=Depends(verify_request_origin), _token=Depends(verify_api_token)):
+    """Combined security dependency for sensitive device-control operations."""
+    return True
+
 # Initialize database
 init_db()
 
@@ -103,8 +136,21 @@ def serve_frontend_index():
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        # Set SameSite=Strict cookie for seamless authenticated local dashboard interaction
+        response.set_cookie(
+            key="artemis_session_token",
+            value=LOCAL_API_TOKEN,
+            httponly=False,
+            samesite="strict",
+            path="/"
+        )
         return response
     return JSONResponse(status_code=404, content={"message": "Frontend index.html not found"})
+
+@app.get("/api/auth/token", dependencies=[Depends(verify_request_origin)])
+def get_session_token():
+    """Provides local frontend with the session API token under strict same-origin check."""
+    return {"token": LOCAL_API_TOKEN}
 
 @app.get("/api/health")
 def health_check():
@@ -129,7 +175,7 @@ def get_device_status():
         available_devices=status.get("available_devices", [])
     )
 
-@app.post("/api/device/pair", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
+@app.post("/api/device/pair", response_model=WirelessResponse, dependencies=[Depends(verify_security)])
 def pair_device(req: PairRequest):
     result = controller.pair_wireless(req.ip, req.port, req.code)
     return WirelessResponse(
@@ -138,7 +184,7 @@ def pair_device(req: PairRequest):
         output=result.get("message")
     )
 
-@app.post("/api/device/pair-qr", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
+@app.post("/api/device/pair-qr", response_model=WirelessResponse, dependencies=[Depends(verify_security)])
 def pair_device_qr(req: QRPairRequest):
     result = controller.pair_with_qr(req.qr_payload, req.phone_ip)
     return WirelessResponse(
@@ -149,7 +195,7 @@ def pair_device_qr(req: QRPairRequest):
         port=result.get("port")
     )
 
-@app.post("/api/device/connect", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
+@app.post("/api/device/connect", response_model=WirelessResponse, dependencies=[Depends(verify_security)])
 def connect_device(req: ConnectRequest):
     result = controller.connect_wireless(req.ip, req.port)
     return WirelessResponse(
@@ -158,7 +204,7 @@ def connect_device(req: ConnectRequest):
         output=result.get("message")
     )
 
-@app.post("/api/device/disconnect", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
+@app.post("/api/device/disconnect", response_model=WirelessResponse, dependencies=[Depends(verify_security)])
 def disconnect_device(req: DisconnectRequest):
     result = controller.disconnect_wireless(req.target)
     return WirelessResponse(
@@ -167,7 +213,7 @@ def disconnect_device(req: DisconnectRequest):
         output=result.get("message")
     )
 
-@app.post("/api/device/select", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
+@app.post("/api/device/select", response_model=WirelessResponse, dependencies=[Depends(verify_security)])
 def select_device(req: SelectDeviceRequest):
     ok = controller.select_device(req.serial)
     return WirelessResponse(
@@ -198,12 +244,12 @@ def get_task_progress():
         return progress
     return {"status": "idle", "task_id": None, "total_steps": 0, "current_step_index": 0}
 
-@app.post("/api/execute", response_model=ExecuteResponse, dependencies=[Depends(verify_request_origin)])
+@app.post("/api/execute", response_model=ExecuteResponse, dependencies=[Depends(verify_security)])
 def execute_instruction(req: ExecuteRequest):
     result = controller.execute_instruction(req.instruction)
     return ExecuteResponse(**result)
 
-@app.post("/api/stop", dependencies=[Depends(verify_request_origin)])
+@app.post("/api/stop", dependencies=[Depends(verify_security)])
 def stop_automation():
     controller.stop_execution()
     return {"status": "success", "message": "Automation stop signal sent."}
@@ -212,7 +258,7 @@ def stop_automation():
 def get_history():
     return get_task_history(limit=50)
 
-@app.post("/api/confirmation", dependencies=[Depends(verify_request_origin)])
+@app.post("/api/confirmation", dependencies=[Depends(verify_security)])
 def handle_confirmation(req: ConfirmationRequest):
     res = controller.process_confirmation(req.task_id, req.approved)
     return res
