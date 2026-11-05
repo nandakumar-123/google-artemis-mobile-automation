@@ -55,3 +55,22 @@ def test_qr_pair_endpoint_standard_format():
     assert response.status_code == 200
     data = response.json()
     assert "success" in data
+
+def test_unauthorized_cross_site_origin_blocked():
+    # Verify CSRF/Origin security blocks cross-site attacks
+    response = client.post(
+        "/api/stop",
+        headers={"Origin": "https://malicious-attacker.com"}
+    )
+    assert response.status_code == 403
+    assert "not authorized" in response.json()["detail"].lower()
+
+def test_authorized_origin_allowed():
+    # Verify local origin passes validation
+    response = client.post(
+        "/api/stop",
+        headers={"Origin": "http://127.0.0.1:8000"}
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+

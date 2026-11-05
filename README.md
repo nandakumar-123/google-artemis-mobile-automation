@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Google Gemini API](https://img.shields.io/badge/Google%20Gen%20AI-Gemini%20API-4285F4.svg?logo=google)](https://ai.google.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests: Pytest](https://img.shields.io/badge/Tests-20%20Passed-brightgreen.svg)](tests/)
+[![Tests: Pytest](https://img.shields.io/badge/Tests-22%20Passed-brightgreen.svg)](tests/)
 
 An intelligent Android mobile phone automation assistant powered by **Google Gemini AI**, **Android Debug Bridge (ADB)**, **FastAPI**, and a real-time web dashboard.
 
@@ -286,9 +286,9 @@ The repository contains automated unit and integration tests using `pytest`:
 .\.venv\Scripts\python.exe -m pytest tests/test_planner.py
 ```
 
-### Verified Test Results (20/20 Passed):
+### Verified Test Results (22/22 Passed):
 - `tests/test_adb.py`: **9 passed** (initialization, version parsing, connection check, already-paired avoidance, QR payload formats).
-- `tests/test_api.py`: **8 passed** (health endpoint, device status, history, stop signal, disconnect, device select, QR error checks).
+- `tests/test_api.py`: **10 passed** (health endpoint, device status, history, stop signal, disconnect, device select, QR error checks, CSRF cross-site origin blocking, local origin access).
 - `tests/test_planner.py`: **3 passed** (YouTube multi-step planning, navigation commands, sensitive action confirmation guards).
 
 ---
@@ -296,9 +296,11 @@ The repository contains automated unit and integration tests using `pytest`:
 ## 🛡️ Security Considerations
 
 - **Secrets Management:** The repository `.gitignore` ensures that `.env`, session databases, and logs are never committed. Placeholders are maintained in `.env.example`.
+- **Request-Origin Validation & CSRF Protection:** All state-changing device-control endpoints (`/api/execute`, `/api/stop`, `/api/device/*`, `/api/confirmation`) actively validate `Origin`, `Referer`, and browser `Sec-Fetch-Site` headers via `verify_request_origin` to prevent unauthorized cross-site requests (CSRF) from malicious websites.
+- **Strict Local Access Controls:** In addition to origin checks, CORS is restricted to local addresses (`127.0.0.1` and `localhost`).
 - **Command Sanitization:** Text entered through `TYPE_TEXT` is escaped to avoid shell injection in ADB commands.
 - **Sensitive Operations Guard:** The planner automatically detects sensitive keywords (e.g. *pay*, *delete*, *uninstall*, *format*, *factory reset*, *send message*) and prompts for interactive user confirmation before execution.
-- **Safe Network Limits:** The server binds locally to `127.0.0.1` by default to prevent unauthorized network access.
+- **Safe Network Limits:** The server binds locally to `127.0.0.1` by default to prevent unauthorized network exposure.
 
 ---
 

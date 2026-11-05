@@ -58,10 +58,14 @@ This project incorporates, depends upon, or interfaces with the following third-
 ---
 
 ## 7. DefusedXML
-- **Description:** Defusing XML vulnerabilities across Python XML parsers.
+- **Description:** XML bomb protection and XML vulnerability defusing for Python standard library modules.
 - **Author:** Christian Heimes
-- **License:** Python Software Foundation License (PSF) / Apache License 2.0
+- **License:** Python Software Foundation License Version 2 (PSFL-2.0)
 - **Upstream Repository:** https://github.com/tiran/defusedxml
+- **Notice:**
+  PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
+  Copyright (c) 2001-2021 Python Software Foundation; All Rights Reserved.
+  Copyright (c) Christian Heimes.
 
 ---
 

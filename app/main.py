@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from urllib.parse import urlparse
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,17 +23,68 @@ from app.schemas import (
 
 app = FastAPI(title="Android AI Assistant", version="1.0.0")
 
-# Security: Configure CORS for local development
+ALLOWED_HOSTS = {
+    "127.0.0.1",
+    "localhost",
+    f"127.0.0.1:{PORT}",
+    f"localhost:{PORT}",
+    f"{HOST}:{PORT}",
+    HOST
+}
+
+# 1. CORS Configuration for local frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://127.0.0.1:8000",
-        "http://localhost:8000"
+        "http://localhost:8000",
+        f"http://{HOST}:{PORT}"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def verify_request_origin(request: Request):
+    """
+    Validates request origin and host to prevent Cross-Site Request Forgery (CSRF)
+    and unauthorized external origin requests against device-control API endpoints.
+    Protects both web browsers (evaluating Origin/Referer/Sec-Fetch-Site) and direct clients.
+    """
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+    sec_fetch_site = request.headers.get("sec-fetch-site")
+
+    # Reject cross-site requests detected by browser Sec-Fetch-Site metadata
+    if sec_fetch_site and sec_fetch_site == "cross-site":
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Cross-site request blocked by origin policy."
+        )
+
+    # Validate Origin header if present
+    if origin:
+        parsed_origin = urlparse(origin)
+        netloc = parsed_origin.netloc.lower()
+        hostname = parsed_origin.hostname.lower() if parsed_origin.hostname else ""
+        if netloc not in ALLOWED_HOSTS and hostname not in ALLOWED_HOSTS:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Forbidden: Origin '{origin}' is not authorized."
+            )
+
+    # Validate Referer header if present
+    if referer:
+        parsed_ref = urlparse(referer)
+        ref_netloc = parsed_ref.netloc.lower()
+        ref_hostname = parsed_ref.hostname.lower() if parsed_ref.hostname else ""
+        if ref_netloc not in ALLOWED_HOSTS and ref_hostname not in ALLOWED_HOSTS:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Forbidden: Referer '{referer}' is not authorized."
+            )
+
+    return True
 
 # Initialize database
 init_db()
@@ -77,7 +129,7 @@ def get_device_status():
         available_devices=status.get("available_devices", [])
     )
 
-@app.post("/api/device/pair", response_model=WirelessResponse)
+@app.post("/api/device/pair", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
 def pair_device(req: PairRequest):
     result = controller.pair_wireless(req.ip, req.port, req.code)
     return WirelessResponse(
@@ -86,7 +138,7 @@ def pair_device(req: PairRequest):
         output=result.get("message")
     )
 
-@app.post("/api/device/pair-qr", response_model=WirelessResponse)
+@app.post("/api/device/pair-qr", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
 def pair_device_qr(req: QRPairRequest):
     result = controller.pair_with_qr(req.qr_payload, req.phone_ip)
     return WirelessResponse(
@@ -97,7 +149,7 @@ def pair_device_qr(req: QRPairRequest):
         port=result.get("port")
     )
 
-@app.post("/api/device/connect", response_model=WirelessResponse)
+@app.post("/api/device/connect", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
 def connect_device(req: ConnectRequest):
     result = controller.connect_wireless(req.ip, req.port)
     return WirelessResponse(
@@ -106,7 +158,7 @@ def connect_device(req: ConnectRequest):
         output=result.get("message")
     )
 
-@app.post("/api/device/disconnect", response_model=WirelessResponse)
+@app.post("/api/device/disconnect", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
 def disconnect_device(req: DisconnectRequest):
     result = controller.disconnect_wireless(req.target)
     return WirelessResponse(
@@ -115,7 +167,7 @@ def disconnect_device(req: DisconnectRequest):
         output=result.get("message")
     )
 
-@app.post("/api/device/select", response_model=WirelessResponse)
+@app.post("/api/device/select", response_model=WirelessResponse, dependencies=[Depends(verify_request_origin)])
 def select_device(req: SelectDeviceRequest):
     ok = controller.select_device(req.serial)
     return WirelessResponse(
@@ -146,12 +198,12 @@ def get_task_progress():
         return progress
     return {"status": "idle", "task_id": None, "total_steps": 0, "current_step_index": 0}
 
-@app.post("/api/execute", response_model=ExecuteResponse)
+@app.post("/api/execute", response_model=ExecuteResponse, dependencies=[Depends(verify_request_origin)])
 def execute_instruction(req: ExecuteRequest):
     result = controller.execute_instruction(req.instruction)
     return ExecuteResponse(**result)
 
-@app.post("/api/stop")
+@app.post("/api/stop", dependencies=[Depends(verify_request_origin)])
 def stop_automation():
     controller.stop_execution()
     return {"status": "success", "message": "Automation stop signal sent."}
@@ -160,7 +212,7 @@ def stop_automation():
 def get_history():
     return get_task_history(limit=50)
 
-@app.post("/api/confirmation")
+@app.post("/api/confirmation", dependencies=[Depends(verify_request_origin)])
 def handle_confirmation(req: ConfirmationRequest):
     res = controller.process_confirmation(req.task_id, req.approved)
     return res
