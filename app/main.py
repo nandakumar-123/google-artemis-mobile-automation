@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from app.config import FRONTEND_DIR, SCREENSHOTS_DIR, HOST, PORT
 from app.device_controller import DeviceController
 from app.database import init_db, get_task_history
@@ -20,6 +21,18 @@ from app.schemas import (
 )
 
 app = FastAPI(title="Android AI Assistant", version="1.0.0")
+
+# Security: Configure CORS for local development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:8000",
+        "http://localhost:8000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialize database
 init_db()
