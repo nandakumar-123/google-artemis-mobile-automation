@@ -322,6 +322,12 @@ The repository contains automated unit and integration tests using `pytest`:
 
 ## 👤 Author & Acknowledgments
 
-- **Author:** Soundar (`nandu`)
-- **Contact:** `231001130@rajalakshmi.edu.in`
-- **Repository:** [https://github.com/nandakumar-123/google-artemis-mobile-automation](https://github.com/nandakumar-123/google-artemis-mobile-automation)
+- **Author:** Nandakumar Anandrajan ([nandakumar-123](https://github.com/nandakumar-123))
+- **Contact:** [nandakumaranandrajan@gmail.com](mailto:nandakumaranandrajan@gmail.com)
+- **GitHub:** [Nandakumar-123](https://github.com/nandakumar-123)
+- **Repository:** [Google Artemis Mobile Automation](https://github.com/nandakumar-123/google-artemis-mobile-automation)
+
+### Acknowledgments
+- **Google:** For Gemini AI and the related developer technologies used in this project.
+- **Open-source contributors:** For the libraries and tools that support this project.
+- *This is an independent project and is not officially affiliated with or endorsed by Google.*

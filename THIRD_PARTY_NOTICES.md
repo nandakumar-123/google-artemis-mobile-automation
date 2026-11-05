@@ -78,3 +78,4 @@ This project incorporates, depends upon, or interfaces with the following third-
 - **Author:** Encode OSS Ltd.
 - **License:** BSD 3-Clause License
 - **Upstream Repository:** https://github.com/encode/httpx
+
