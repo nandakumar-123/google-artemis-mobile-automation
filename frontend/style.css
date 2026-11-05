@@ -1,0 +1,418 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background-color: #0d1117;
+  color: #c9d1d9;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  height: 56px;
+  background-color: #161b22;
+  border-bottom: 1px solid #30363d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: #58a6ff;
+}
+
+.status-badges {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background-color: #21262d;
+  border: 1px solid #30363d;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #8b949e;
+}
+
+.dot.connected { background-color: #3fb950; }
+.dot.warning { background-color: #d29922; }
+.dot.error { background-color: #f85149; }
+
+/* Main Layout */
+.main-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Left / Main Chat */
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #0d1117;
+  border-right: 1px solid #30363d;
+}
+
+.chat-history {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.message {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.message.user {
+  align-self: flex-end;
+  background-color: #1f6feb;
+  color: #ffffff;
+  border-bottom-right-radius: 2px;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-bottom-left-radius: 2px;
+}
+
+.message-time {
+  font-size: 0.7rem;
+  color: #8b949e;
+  margin-top: 6px;
+  text-align: right;
+}
+
+.action-step-card {
+  margin-top: 8px;
+  padding: 10px;
+  background: #21262d;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  border-left: 3px solid #58a6ff;
+}
+
+.step-item {
+  padding: 4px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-bottom: 1px solid #30363d;
+}
+
+.step-item:last-child {
+  border-bottom: none;
+}
+
+.step-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.step-badge.success {
+  background: rgba(63, 185, 80, 0.2);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.4);
+}
+
+.step-badge.failed, .step-badge.error {
+  background: rgba(248, 81, 73, 0.2);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.4);
+}
+
+.step-badge.stopped {
+  background: rgba(210, 153, 34, 0.2);
+  color: #d29922;
+  border: 1px solid rgba(210, 153, 34, 0.4);
+}
+
+.step-details {
+  font-size: 0.74rem;
+  color: #8b949e;
+  margin-top: 2px;
+}
+
+/* Chat Input Bar */
+.chat-input-bar {
+  padding: 14px 20px;
+  background-color: #161b22;
+  border-top: 1px solid #30363d;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-input-bar input {
+  flex: 1;
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #fff;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.chat-input-bar input:focus {
+  border-color: #58a6ff;
+}
+
+.btn {
+  padding: 7px 13px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s;
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn-primary {
+  background-color: #238636;
+  color: #fff;
+}
+
+.btn-danger {
+  background-color: #da3633;
+  color: #fff;
+}
+
+.btn-secondary {
+  background-color: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+}
+
+.btn-info {
+  background-color: #1f6feb;
+  color: #fff;
+}
+
+/* Tabs for Wireless ADB */
+.tabs-header {
+  display: flex;
+  border-bottom: 1px solid #30363d;
+  margin-bottom: 10px;
+}
+
+.tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #8b949e;
+  padding: 6px 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.tab-btn.active {
+  color: #58a6ff;
+  border-bottom-color: #58a6ff;
+}
+
+/* QR Camera Scanner View */
+.qr-scanner-box {
+  display: none;
+  background: #000;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+#qrReader {
+  width: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 390px;
+  background-color: #161b22;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-left: 1px solid #30363d;
+}
+
+.panel-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid #30363d;
+}
+
+.panel-title {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  color: #8b949e;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 8px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.73rem;
+  color: #8b949e;
+  margin-bottom: 3px;
+}
+
+.form-input {
+  width: 100%;
+  background-color: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #c9d1d9;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: #58a6ff;
+}
+
+.form-row {
+  display: flex;
+  gap: 8px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.btn-group {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Screen Preview */
+.screen-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #0d1117;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  padding: 8px;
+  min-height: 200px;
+}
+
+.screen-preview-container img {
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* Device info */
+.device-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-label { color: #8b949e; }
+.info-val { color: #58a6ff; font-weight: 500; }
+
+/* Confirmation Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-card {
+  background-color: #161b22;
+  border: 1px solid #f85149;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.modal-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f85149;
+  margin-bottom: 12px;
+}
+
+.modal-body {
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

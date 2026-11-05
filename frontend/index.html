@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android AI Assistant (QR + Wireless + USB ADB)</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/html5-qrcode.min.js"></script>
+  <script>
+    // Inline failsafe tab switcher
+    function switchTab(selected) {
+      var tQR = document.getElementById('tabQR');
+      var tCode = document.getElementById('tabCode');
+      var tConnect = document.getElementById('tabConnect');
+      var vQR = document.getElementById('viewQR');
+      var vCode = document.getElementById('viewCode');
+      var vConnect = document.getElementById('viewConnect');
+
+      if (tQR) tQR.className = 'tab-btn';
+      if (tCode) tCode.className = 'tab-btn';
+      if (tConnect) tConnect.className = 'tab-btn';
+
+      if (vQR) vQR.style.display = 'none';
+      if (vCode) vCode.style.display = 'none';
+      if (vConnect) vConnect.style.display = 'none';
+
+      if (selected === 'qr') {
+        if (tQR) tQR.className = 'tab-btn active';
+        if (vQR) vQR.style.display = 'block';
+      } else if (selected === 'code') {
+        if (tCode) tCode.className = 'tab-btn active';
+        if (vCode) vCode.style.display = 'block';
+      } else if (selected === 'connect') {
+        if (tConnect) tConnect.className = 'tab-btn active';
+        if (vConnect) vConnect.style.display = 'block';
+      }
+    }
+    window.switchTab = switchTab;
+  </script>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header class="header">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+        <line x1="12" y1="18" x2="12" y2="18"></line>
+      </svg>
+      <span>Android AI Assistant</span>
+    </div>
+
+    <div class="status-badges">
+      <div class="badge" id="backendBadge">
+        <span class="dot connected"></span>
+        <span id="backendText">Backend: Online</span>
+      </div>
+      <div class="badge" id="geminiBadge">
+        <span class="dot warning"></span>
+        <span id="geminiText">Gemini: Checking...</span>
+      </div>
+      <div class="badge" id="deviceBadge">
+        <span class="dot error"></span>
+        <span id="deviceText">Device: Disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <div class="main-container">
+
+    <!-- Chat Area -->
+    <main class="chat-panel">
+      <div class="chat-history" id="chatHistory">
+        <div class="message assistant">
+          Welcome to <strong>Android AI Assistant</strong>!
+          <br><br>
+          Pair your iQOO phone via <strong>QR Code scan</strong>, <strong>Pairing code</strong>, or <strong>USB cable</strong>.
+          <br>
+          Try typing:
+          <ul style="margin: 8px 0 0 18px;">
+            <li>"Open YouTube"</li>
+            <li>"Open YouTube and search for Python tutorials"</li>
+            <li>"Open Settings and find Battery"</li>
+            <li>"Capture my phone screen and explain"</li>
+          </ul>
+          <div class="message-time">Just now</div>
+        </div>
+      </div>
+
+      <!-- Command Input -->
+      <form class="chat-input-bar" id="commandForm">
+        <input type="text" id="commandInput" placeholder="Tell me what to do on your phone..." autocomplete="off">
+        <button type="submit" class="btn btn-primary" id="executeBtn">Execute</button>
+        <button type="button" class="btn btn-danger" id="stopBtn" title="Stop Automation">Stop</button>
+        <button type="button" class="btn btn-secondary" id="clearBtn" title="Clear Chat">Clear</button>
+      </form>
+    </main>
+
+    <!-- Sidebar / Wireless ADB, Device Status & Preview -->
+    <aside class="sidebar">
+
+      <!-- Wireless ADB Pairing & Connection Panel -->
+      <div class="panel-section">
+        <div class="panel-title">
+          <span>Wireless ADB Connection</span>
+        </div>
+
+        <!-- Mode selection tabs -->
+        <div class="tabs-header">
+          <button type="button" class="tab-btn active" id="tabQR" onclick="window.switchTab('qr')">QR Code Pair</button>
+          <button type="button" class="tab-btn" id="tabCode" onclick="window.switchTab('code')">Pairing Code</button>
+          <button type="button" class="tab-btn" id="tabConnect" onclick="window.switchTab('connect')">Connect</button>
+        </div>
+
+        <!-- 1. QR Code Pairing Tab View -->
+        <div id="viewQR">
+          <div class="form-group">
+            <label>Phone IP (Optional Fallback)</label>
+            <input type="text" id="qrPhoneIp" class="form-input" placeholder="e.g. 192.168.137.xx">
+          </div>
+
+          <div class="qr-scanner-box" id="qrScannerBox">
+            <div id="qrReader"></div>
+          </div>
+
+          <div class="btn-group">
+            <button type="button" class="btn btn-primary" style="flex: 1;" id="startCameraBtn">Start Camera</button>
+            <button type="button" class="btn btn-secondary" style="flex: 1; display: none;" id="stopCameraBtn">Stop Camera</button>
+          </div>
+          <p style="font-size: 0.72rem; color: #8b949e; margin-top: 6px;">
+            Hold phone QR screen up to laptop webcam. Scans <code>WIFI:T:ADB;S:...;P:...;;</code> payload securely.
+          </p>
+        </div>
+
+        <!-- 2. Manual Pairing Code Tab View -->
+        <div id="viewCode" style="display: none;">
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label>Phone IP</label>
+              <input type="text" id="codePhoneIp" class="form-input" placeholder="e.g. 192.168.137.xx">
+            </div>
+            <div class="form-group" style="flex: 1.2;">
+              <label>Pair Port</label>
+              <input type="number" id="pairPort" class="form-input" placeholder="Port">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>6-Digit Pairing Code</label>
+            <input type="text" id="pairCode" class="form-input" placeholder="e.g. 123456">
+          </div>
+          <div class="btn-group">
+            <button type="button" class="btn btn-primary" style="flex: 1;" id="pairCodeBtn">Pair with Code</button>
+          </div>
+        </div>
+
+        <!-- 3. Connect Tab View -->
+        <div id="viewConnect" style="display: none;">
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label>Phone IP</label>
+              <input type="text" id="connectIp" class="form-input" placeholder="e.g. 192.168.137.xx">
+            </div>
+            <div class="form-group" style="flex: 1.2;">
+              <label>Connect Port</label>
+              <input type="number" id="connectPort" class="form-input" placeholder="Port">
+            </div>
+          </div>
+          <div class="btn-group">
+            <button type="button" class="btn btn-primary" style="flex: 1;" id="connectBtn">Connect ADB</button>
+            <button type="button" class="btn btn-danger" style="flex: 0.8;" id="disconnectBtn">Disconnect</button>
+          </div>
+        </div>
+
+        <div id="wirelessStatusMsg" style="font-size: 0.75rem; margin-top: 8px; min-height: 18px; color: #8b949e; word-break: break-all;"></div>
+      </div>
+
+      <!-- Device Status Section -->
+      <div class="panel-section">
+        <div class="panel-title">
+          <span>Active Device</span>
+          <button class="btn btn-secondary" style="padding: 2px 7px; font-size: 0.75rem;" id="refreshDeviceBtn">Refresh</button>
+        </div>
+        <div class="device-info-list">
+          <div class="info-item">
+            <span class="info-label">Model:</span>
+            <span class="info-val" id="devModel">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Target Serial:</span>
+            <span class="info-val" id="devSerial">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Connection:</span>
+            <span class="info-val" id="devType" style="text-transform: uppercase;">--</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Status:</span>
+            <span class="info-val" id="devStatus" style="color: #f85149;">No device</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Current App:</span>
+            <span class="info-val" id="devApp" style="font-size: 0.73rem; word-break: break-all;">--</span>
+          </div>
+          <!-- Multiple attached devices selector -->
+          <div class="form-group" id="deviceSelectContainer" style="margin-top: 6px; display: none;">
+            <label>Select Active Device</label>
+            <select id="deviceSelector" class="form-input"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Screen Preview -->
+      <div class="panel-section">
+        <div class="panel-title">
+          <span>Screen Preview</span>
+          <button class="btn btn-secondary" style="padding: 2px 7px; font-size: 0.75rem;" id="refreshScreenBtn">Refresh</button>
+        </div>
+        <div class="screen-preview-container">
+          <img id="screenImg" src="/api/device/screenshot" alt="Device Screen Preview">
+        </div>
+      </div>
+
+      <!-- Task History -->
+      <div class="panel-section" style="flex: 1; border-bottom: none;">
+        <div class="panel-title">
+          <span>Recent Tasks</span>
+        </div>
+        <div id="historyList" style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px;">
+          <div style="color: #8b949e;">No previous tasks yet.</div>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- Safety Confirmation Modal -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-card">
+      <div class="modal-header">Sensitive Action Confirmation</div>
+      <div class="modal-body" id="confirmPromptText">
+        Are you sure you want to execute this action?
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="confirmRejectBtn">Cancel</button>
+        <button class="btn btn-danger" id="confirmApproveBtn">Confirm & Proceed</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=2"></script>
+</body>
+</html>
