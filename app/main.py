@@ -185,6 +185,34 @@ def serve_frontend_index(request: Request):
         return response
     return JSONResponse(status_code=404, content={"message": "Frontend index.html not found"})
 
+@app.get("/api/csrf-token")
+def get_csrf_token(request: Request):
+    """
+    Returns the CSRF token and sets the cookies if not already set,
+    ensuring browsers always have a valid token even if index.html was cached.
+    """
+    existing_csrf = request.cookies.get("artemis_csrf_token")
+    csrf_value = existing_csrf if existing_csrf else secrets.token_hex(24)
+    response = JSONResponse(content={"csrf_token": csrf_value})
+    
+    if not request.cookies.get("artemis_session_token"):
+        response.set_cookie(
+            key="artemis_session_token",
+            value=LOCAL_API_TOKEN,
+            httponly=True,
+            samesite="strict",
+            path="/"
+        )
+    if not existing_csrf:
+        response.set_cookie(
+            key="artemis_csrf_token",
+            value=csrf_value,
+            httponly=False,
+            samesite="strict",
+            path="/"
+        )
+    return response
+
 @app.get("/api/health")
 def health_check():
     gemini_status = controller.gemini.is_configured()

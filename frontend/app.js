@@ -7,10 +7,28 @@ const stopBtn = document.getElementById('stopBtn');
 const clearBtn = document.getElementById('clearBtn');
 
 // Local CSRF protection helper for cookie-authenticated browser sessions
+let inMemoryCsrfToken = '';
+
 function getCsrfToken() {
   const match = document.cookie.match(new RegExp('(^| )artemis_csrf_token=([^;]+)'));
-  return match ? match[2] : '';
+  if (match) return match[2];
+  return inMemoryCsrfToken;
 }
+
+async function initCsrfToken() {
+  try {
+    const res = await fetch('/api/csrf-token');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.csrf_token) {
+        inMemoryCsrfToken = data.csrf_token;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to pre-fetch CSRF token:', e);
+  }
+}
+initCsrfToken();
 
 function authHeaders(extraHeaders = {}) {
   const headers = { ...extraHeaders };
@@ -230,13 +248,17 @@ async function checkDeviceStatus() {
 deviceSelector.addEventListener('change', async (e) => {
   const chosen = e.target.value;
   try {
+    if (!getCsrfToken()) {
+      await initCsrfToken();
+    }
     const res = await fetch('/api/device/select', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ serial: chosen })
     });
     const result = await res.json();
-    showWirelessMsg(result.message, !result.success);
+    const msg = result.message || result.detail || 'Device selection updated';
+    showWirelessMsg(msg, !result.success);
     checkDeviceStatus();
     refreshScreenshot();
   } catch (err) {
@@ -305,14 +327,18 @@ async function onScanSuccess(decodedText) {
   const fallbackIp = qrPhoneIp.value.trim() || undefined;
 
   try {
+    if (!getCsrfToken()) {
+      await initCsrfToken();
+    }
     const res = await fetch('/api/device/pair-qr', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ qr_payload: decodedText, phone_ip: fallbackIp })
     });
     const result = await res.json();
-    showWirelessMsg(result.message, !result.success);
-    appendMessage(`QR Pairing: ${result.message}`, 'assistant');
+    const msg = result.message || result.detail || (result.success ? 'QR Pairing successful' : 'QR Pairing failed');
+    showWirelessMsg(msg, !result.success);
+    appendMessage(`QR Pairing: ${msg}`, 'assistant');
 
     if (result.success) {
       if (result.ip) {
@@ -372,22 +398,27 @@ pairCodeBtn.addEventListener('click', async () => {
   pairCodeBtn.disabled = true;
 
   try {
+    if (!getCsrfToken()) {
+      await initCsrfToken();
+    }
     const res = await fetch('/api/device/pair', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ ip, port, code })
     });
     const result = await res.json();
-    showWirelessMsg(result.message, !result.success);
-    appendMessage(`Code Pairing: ${result.message}`, 'assistant');
+    const msg = result.message || result.detail || (result.success ? 'Pairing successful' : 'Pairing failed');
+    showWirelessMsg(msg, !result.success);
+    appendMessage(`Code Pairing: ${msg}`, 'assistant');
 
     if (result.success) {
       connectIp.value = ip;
       switchTab('connect');
     }
   } catch (err) {
-    showWirelessMsg(`Pair request error: ${err.message}`, true);
-    appendMessage(`Pairing Error: ${err.message}`, 'assistant');
+    const errMsg = err.message || 'Unknown network error';
+    showWirelessMsg(`Pair request error: ${errMsg}`, true);
+    appendMessage(`Pairing Error: ${errMsg}`, 'assistant');
   } finally {
     pairCodeBtn.disabled = false;
   }
@@ -409,19 +440,24 @@ connectBtn.addEventListener('click', async () => {
   connectBtn.disabled = true;
 
   try {
+    if (!getCsrfToken()) {
+      await initCsrfToken();
+    }
     const res = await fetch('/api/device/connect', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ ip, port })
     });
     const result = await res.json();
-    showWirelessMsg(result.message, !result.success);
-    appendMessage(`Wireless ADB: ${result.message}`, 'assistant');
+    const msg = result.message || result.detail || (result.success ? 'Connected successfully' : 'Connection failed');
+    showWirelessMsg(msg, !result.success);
+    appendMessage(`Wireless ADB: ${msg}`, 'assistant');
     checkDeviceStatus();
     refreshScreenshot();
   } catch (err) {
-    showWirelessMsg(`Connect error: ${err.message}`, true);
-    appendMessage(`Connect Error: ${err.message}`, 'assistant');
+    const errMsg = err.message || 'Unknown connection error';
+    showWirelessMsg(`Connect error: ${errMsg}`, true);
+    appendMessage(`Connect Error: ${errMsg}`, 'assistant');
   } finally {
     connectBtn.disabled = false;
   }
@@ -430,18 +466,23 @@ connectBtn.addEventListener('click', async () => {
 disconnectBtn.addEventListener('click', async () => {
   showWirelessMsg('Disconnecting...');
   try {
+    if (!getCsrfToken()) {
+      await initCsrfToken();
+    }
     const res = await fetch('/api/device/disconnect', {
       method: 'POST',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({})
     });
     const result = await res.json();
-    showWirelessMsg(result.message, !result.success);
-    appendMessage(`Disconnected: ${result.message}`, 'assistant');
+    const msg = result.message || result.detail || (result.success ? 'Disconnected successfully' : 'Disconnect failed');
+    showWirelessMsg(msg, !result.success);
+    appendMessage(`Disconnected: ${msg}`, 'assistant');
     checkDeviceStatus();
     refreshScreenshot();
   } catch (err) {
-    showWirelessMsg(`Disconnect error: ${err.message}`, true);
+    const errMsg = err.message || 'Unknown error';
+    showWirelessMsg(`Disconnect error: ${errMsg}`, true);
   }
 });
 
