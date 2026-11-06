@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 from typing import Optional, Dict, Any
@@ -118,4 +119,89 @@ You must respond ONLY with a valid JSON object matching this schema:
                 continue
 
         logger.error("All Gemini API model attempts failed. Falling back to rule-based planner.")
+        return None
+
+    def plan_recovery_action(
+        self,
+        instruction: str,
+        failed_action: Dict[str, Any],
+        failure_reason: str,
+        current_screen_info: Dict[str, Any],
+        current_app: str,
+        screenshot_path: Optional[str] = None
+    ) -> Optional[ActionItem]:
+        """
+        Self-healing recovery planner: inspects the failed step, error reason,
+        and current UI hierarchy/screenshot to generate a single corrected action.
+        """
+        if not self.is_configured():
+            logger.warning("Gemini not configured; skipping AI recovery generation.")
+            return None
+
+        prompt = f"""
+You are the Self-Healing Recovery Engine for Android Automation.
+An action has just FAILED or failed verification during automation execution.
+Analyze the original user instruction, the action that failed, the reason for failure,
+and the current live screen state to generate ONE precise corrected ActionItem.
+
+User Goal / Instruction: "{instruction}"
+Current Foreground App: "{current_app}"
+Failed Action: {json.dumps(failed_action)}
+Failure Reason: "{failure_reason}"
+
+Live UI Elements on Screen:
+{json.dumps(current_screen_info, indent=2)}
+
+Recovery Strategies:
+1. If TAP_TEXT failed because text wasn't found, check if a similar button or content_description exists in the live elements.
+2. If the keyboard or an unexpected modal dialog popped up, tap a dismiss/close/cancel button or use PRESS_BACK.
+3. If the element is slightly offscreen, generate a SWIPE action.
+4. If an app wasn't loaded yet, return WAIT or WAIT_FOR_APP.
+5. If text wasn't entered, tap the focused input field before typing.
+
+Return ONLY a single JSON object conforming to ActionItem schema:
+{{
+  "type": "TAP_TEXT" | "TAP_CONTENT_DESCRIPTION" | "TAP_COORDINATES" | "SWIPE" | "PRESS_BACK" | "TYPE_TEXT" | "PRESS_ENTER" | "WAIT",
+  "text": "corrected text or null",
+  "content_description": "corrected desc or null",
+  "resource_id": "resource id or null",
+  "x": null,
+  "y": null,
+  "direction": null,
+  "reason": "short explanation of why this fixes the issue"
+}}
+"""
+        candidates = [self.model_name]
+        for fallback in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+            if fallback not in candidates:
+                candidates.append(fallback)
+
+        for model in candidates:
+            try:
+                from google.genai import types
+                contents = [prompt]
+                
+                # If screenshot exists and is accessible, attach it for multimodal visual reasoning
+                if screenshot_path and os.path.exists(screenshot_path):
+                    try:
+                        from PIL import Image
+                        img = Image.open(screenshot_path)
+                        contents.append(img)
+                    except Exception as img_err:
+                        logger.warning(f"Could not attach screenshot to recovery prompt: {img_err}")
+
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.1
+                    )
+                )
+                data = json.loads(response.text)
+                return ActionItem.model_validate(data)
+            except Exception as e:
+                logger.warning(f"Recovery generation with {model} failed: {e}")
+                continue
+
         return None

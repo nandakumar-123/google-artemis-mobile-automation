@@ -285,12 +285,24 @@ The repository contains automated unit and integration tests using `pytest`:
 .\.venv\Scripts\python.exe -m pytest tests/test_adb.py
 .\.venv\Scripts\python.exe -m pytest tests/test_api.py
 .\.venv\Scripts\python.exe -m pytest tests/test_planner.py
+.\.venv\Scripts\python.exe -m pytest tests/test_self_healing.py
 ```
 
-### Verified Test Results (30/30 Passed):
+### Verified Test Results (34/34 Passed):
 - `tests/test_adb.py`: **9 passed** (initialization, version parsing, connection check, already-paired avoidance, QR payload formats).
 - `tests/test_api.py`: **18 passed** (health endpoint, device status, history, stop signal, disconnect, device select, QR error checks, local API token validation, unauthorized missing/invalid token rejection, missing origin rejection, cross-site origin blocking, Bearer token authorization, HttpOnly and SameSite=Strict cookie flags, removal of raw token endpoint, valid CSRF cookie auth, and CSRF attack/mismatch rejection).
 - `tests/test_planner.py`: **3 passed** (YouTube multi-step planning, navigation commands, sensitive action confirmation guards).
+- `tests/test_self_healing.py`: **4 passed** (successful empirical verification, failed verification on frozen screen, maximum 2 recovery attempts enforcement, and immediate execution cancellation).
+
+---
+
+## 🩹 Self-Healing AI Automation Architecture
+
+1. **Empirical Screen-State Verification**: Post-action verification actively compares pre- and post-action screen state fingerprints (foreground application package, interactive element count, and visible text mutations). An action is never verified as successful without empirical evidence of screen change.
+2. **Dynamic UI Element Matching**: Elements are prioritized based on interactive clickable status, exact text matches, content descriptions, resource IDs, and bounding box dimensions, avoiding misclicks on non-interactive full-screen containers.
+3. **Multimodal AI Recovery**: When an action fails or fails verification, the current UI hierarchy and screenshot are packaged into a self-healing prompt sent to Google Gemini, which synthesizes a corrected action.
+4. **Bounded Recovery Retries**: Automation steps are protected by a hard limit of 2 recovery attempts per step to prevent infinite looping and unnecessary API quota usage.
+5. **Dashboard Transparency**: Recovery attempts (`🩹 1/2 self-healing attempts made`), verification details, and clear failure reasons are displayed in real-time in the dashboard.
 
 ---
 

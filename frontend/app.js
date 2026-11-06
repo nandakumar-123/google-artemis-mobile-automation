@@ -129,6 +129,8 @@ function appendMessage(text, sender = 'user', steps = null) {
       const actionName = s.action || s.type || 'ACTION';
       const detailInfo = s.step_description || (s.package ? `Package: ${s.package}` : (s.matched_text ? `Target: "${s.matched_text}"` : (s.matched_desc ? `Desc: "${s.matched_desc}"` : (s.typed_text ? `Typed: "${s.typed_text}"` : ''))));
       const verifyInfo = s.verification && s.verification.details ? s.verification.details : '';
+      const recoveryInfo = s.recovery_details ? `🩹 ${s.recovery_details}` : '';
+      const failureReason = s.verification && s.verification.failure_reason ? s.verification.failure_reason : (s.message || '');
       
       content += `
         <div class="step-item">
@@ -136,8 +138,9 @@ function appendMessage(text, sender = 'user', steps = null) {
             <span class="step-badge ${statusClass}">${s.status || 'done'}</span>
             <strong>#${idx + 1} ${actionName}</strong>
             ${detailInfo ? `<div class="step-details">${detailInfo}</div>` : ''}
+            ${recoveryInfo ? `<div class="step-details" style="color: #d29922;">${recoveryInfo}</div>` : ''}
             ${verifyInfo ? `<div class="step-details" style="color: #58a6ff;">🔍 ${verifyInfo}</div>` : ''}
-            ${s.message ? `<div class="step-details" style="color: #f85149;">⚠️ ${s.message}</div>` : ''}
+            ${statusClass === 'failed' || statusClass === 'error' ? `<div class="step-details" style="color: #f85149;">❌ Failure Reason: ${failureReason}</div>` : ''}
           </div>
         </div>
       `;

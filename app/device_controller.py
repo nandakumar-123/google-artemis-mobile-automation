@@ -167,47 +167,111 @@ class DeviceController:
 
             logger.info(f"Sequential Execution -> {step_desc}")
 
-            # Execution with error recovery retry
-            max_retries = action.retry_count if action.retry_count is not None else MAX_RETRIES_PER_STEP
-            attempt = 0
+            # Pre-action screen state capture for robust verification
+            pre_state = self.verifier.capture_screen_fingerprint()
+            current_action_target = action
+
+            max_recovery_attempts = min(action.retry_count if action.retry_count is not None else MAX_RETRIES_PER_STEP, 2)
+            recovery_count = 0
             action_result = None
+            verification = None
 
-            while attempt <= max_retries:
+            while True:
                 if self.executor.stop_requested:
+                    action_result = {"action": current_action_target.type, "status": "stopped", "message": "Automation stopped by user"}
                     break
 
-                action_result = self.executor.execute_action(action)
-                
-                # Check result status
-                if action_result.get("status") == "success":
+                # 1. Execute target action
+                action_result = self.executor.execute_action(current_action_target)
+
+                # If stopped mid-action, exit early
+                if action_result.get("status") == "stopped" or self.executor.stop_requested:
                     break
-                elif action_result.get("status") == "stopped":
+
+                # 2. Verify screen state change
+                current_app = self.adb.get_current_app()
+                verification = self.verifier.verify_action_result(
+                    action_type=current_action_target.type,
+                    action_data=current_action_target.model_dump(),
+                    initial_app=pre_state.get("foreground_app", ""),
+                    pre_state=pre_state
+                )
+
+                # Determine if execution and verification both succeeded
+                exec_ok = (action_result.get("status") == "success")
+                verify_ok = verification.get("verified", False)
+
+                if exec_ok and verify_ok:
+                    action_result["status"] = "success"
                     break
+
+                # If execution failed or verification failed, attempt self-healing recovery if quota remains
+                if recovery_count < max_recovery_attempts:
+                    recovery_count += 1
+                    failure_reason = action_result.get("message") or verification.get("failure_reason") or "Action executed but screen state did not change."
+                    logger.warning(
+                        f"Step {idx+1} failed verification or execution (recovery attempt {recovery_count}/{max_recovery_attempts}): {failure_reason}"
+                    )
+
+                    # Update progress UI with recovery status
+                    if self.active_progress:
+                        self.active_progress.current_action = f"{step_desc} [Self-Healing Attempt {recovery_count}/{max_recovery_attempts}]"
+
+                    # Capture updated live UI state and screenshot for Gemini recovery planner
+                    time.sleep(1.0)
+                    latest_screen_info = self.screen_reader.get_screen_summary()
+                    latest_screenshot = self.screen_reader.capture_screenshot()
+                    latest_app = self.adb.get_current_app()
+
+                    recovered_action = None
+                    try:
+                        recovered_action = self.gemini.plan_recovery_action(
+                            instruction=instruction,
+                            failed_action=current_action_target.model_dump(),
+                            failure_reason=failure_reason,
+                            current_screen_info=latest_screen_info,
+                            current_app=latest_app,
+                            screenshot_path=latest_screenshot
+                        )
+                    except Exception as rec_err:
+                        logger.error(f"Error during AI recovery generation: {rec_err}")
+
+                    if recovered_action:
+                        logger.info(f"Self-Healing generated corrected action: {recovered_action.type} ({recovered_action.reason or ''})")
+                        current_action_target = recovered_action
+                        # Reset pre_state to current screen before executing recovery action
+                        pre_state = self.verifier.capture_screen_fingerprint()
+                        continue
+                    else:
+                        # Fallback heuristic: small pause and retry
+                        time.sleep(1.2)
+                        pre_state = self.verifier.capture_screen_fingerprint()
+                        continue
                 else:
-                    attempt += 1
-                    if attempt <= max_retries:
-                        logger.warning(f"Action {action.type} failed (attempt {attempt}/{max_retries}). Inspecting screen & retrying...")
-                        # Screen recovery: pause and inspect UI
-                        time.sleep(1.0)
-                        # If app wasn't in foreground, try re-focusing or waiting
-                        if action.type in ["TAP_TEXT", "TAP_CONTENT_DESCRIPTION"]:
-                            time.sleep(1.2)
+                    # Maximum recovery attempts exhausted
+                    if not exec_ok:
+                        action_result["status"] = "failed"
+                    elif not verify_ok:
+                        action_result["status"] = "failed"
+                        action_result["message"] = verification.get("failure_reason") or "Verification failed: screen state did not change."
+                    break
 
             if not action_result:
                 action_result = {"action": action.type, "status": "failed", "message": "Unknown execution error"}
 
-            # Screen Verification after important actions
-            current_app = self.adb.get_current_app()
-            verification = self.verifier.verify_action_result(action.type, action.model_dump(), current_app)
-            action_result["verification"] = verification
+            if verification:
+                action_result["verification"] = verification
             action_result["step_index"] = idx + 1
             action_result["step_description"] = step_desc
+            action_result["recovery_attempts"] = recovery_count
+            if recovery_count > 0:
+                action_result["recovery_details"] = f"{recovery_count}/{max_recovery_attempts} self-healing attempts made"
 
             executed_actions.append(action_result)
 
             if action_result.get("status") in ["failed", "error"]:
                 overall_success = False
-                error_msg = action_result.get("message") or action_result.get("error") or f"{action.type} failed after retries"
+                error_msg = action_result.get("message") or action_result.get("error") or f"{action.type} failed after {recovery_count} recovery attempts"
                 if self.active_progress:
                     self.active_progress.failed_steps.append(action_result)
                 break

@@ -19,6 +19,18 @@ class UIElement:
         left, top, right, bottom = self.bounds
         return ((left + right) // 2, (top + bottom) // 2)
 
+    @property
+    def width(self) -> int:
+        return max(0, self.bounds[2] - self.bounds[0])
+
+    @property
+    def height(self) -> int:
+        return max(0, self.bounds[3] - self.bounds[1])
+
+    @property
+    def area(self) -> int:
+        return self.width * self.height
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "text": self.text,
@@ -27,6 +39,8 @@ class UIElement:
             "class_name": self.class_name,
             "bounds": list(self.bounds),
             "center": list(self.center),
+            "width": self.width,
+            "height": self.height,
             "clickable": self.clickable
         }
 
@@ -120,28 +134,44 @@ class ScreenReader:
         content_desc: Optional[str] = None,
         resource_id: Optional[str] = None,
         class_name: Optional[str] = None,
+        clickable_only: bool = False,
+        prefer_clickable: bool = True,
         match_index: int = 0,
         elements: Optional[List[UIElement]] = None
     ) -> Optional[UIElement]:
         """
-        Dynamically finds matching UIElement based on text, content_desc, resource_id, class_name.
+        Dynamically finds matching UIElement based on clickable status, exact text,
+        content descriptions, resource IDs, class names, and bounds.
         Supports exact match first, then substring/case-insensitive match.
-        Supports indexing (e.g. match_index=0 for first video result).
+        Prefers clickable elements and valid bounded regions.
         """
         all_elements = elements if elements is not None else self.dump_and_parse_ui()
         if not all_elements:
             return None
 
-        candidates: List[UIElement] = []
+        # Filter out invalid or zero-area bounds
+        valid_elements = [el for el in all_elements if el.area > 0]
+        if clickable_only:
+            valid_elements = [el for el in valid_elements if el.clickable]
+
+        if not valid_elements:
+            return None
 
         norm_text = text.strip().lower() if text else None
         norm_desc = content_desc.strip().lower() if content_desc else None
         norm_res = resource_id.strip().lower() if resource_id else None
         norm_cls = class_name.strip().lower() if class_name else None
 
-        # Pass 1: Exact matches
+        def _sort_key(el: UIElement) -> Tuple[int, int]:
+            # Prefer clickable (0 before 1), then prefer reasonable interactive size
+            click_rank = 0 if el.clickable else (1 if not prefer_clickable else 2)
+            # Penalize huge full-screen overlay bounds when matching specific items
+            area_penalty = 1 if el.area > 2000000 else 0
+            return (click_rank, area_penalty)
+
+        # Pass 1: Exact matches across text, content_desc, or resource_id
         exact_matches = []
-        for el in all_elements:
+        for el in valid_elements:
             el_text = el.text.strip().lower()
             el_desc = el.content_desc.strip().lower()
             el_res = el.resource_id.strip().lower()
@@ -152,20 +182,23 @@ class ScreenReader:
                 matched = False
             if norm_desc and norm_desc != el_desc:
                 matched = False
-            if norm_res and norm_res != el_res:
+            if norm_res and norm_res != el_res and not el_res.endswith(f"/{norm_res}"):
                 matched = False
             if norm_cls and norm_cls != el_cls:
                 matched = False
+
             if matched:
                 exact_matches.append(el)
 
         if exact_matches:
+            if prefer_clickable:
+                exact_matches.sort(key=_sort_key)
             idx = min(max(0, match_index), len(exact_matches) - 1)
             return exact_matches[idx]
 
         # Pass 2: Substring matches
         sub_matches = []
-        for el in all_elements:
+        for el in valid_elements:
             el_text = el.text.strip().lower()
             el_desc = el.content_desc.strip().lower()
             el_res = el.resource_id.strip().lower()
@@ -180,10 +213,13 @@ class ScreenReader:
                 matched = False
             if norm_cls and norm_cls not in el_cls:
                 matched = False
+
             if matched:
                 sub_matches.append(el)
 
         if sub_matches:
+            if prefer_clickable:
+                sub_matches.sort(key=_sort_key)
             idx = min(max(0, match_index), len(sub_matches) - 1)
             return sub_matches[idx]
 
