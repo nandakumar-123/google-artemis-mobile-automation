@@ -100,8 +100,10 @@ def verify_api_token(request: Request):
     Authenticates requests for sensitive device-control operations.
     Supports two secure authentication pathways:
     1. External clients: Header authentication via 'X-API-Token' or 'Authorization: Bearer <token>' matching LOCAL_API_TOKEN.
-    2. Local dashboard: Cookie authentication via HttpOnly session cookie 'artemis_session_token' AND
-       double-submit CSRF token matching 'artemis_csrf_token' cookie against 'X-CSRF-Token' request header.
+    2. Local dashboard: Cookie authentication via session cookie 'artemis_session_token' (which holds LOCAL_API_TOKEN)
+       AND CSRF protection via 'artemis_csrf_token' cookie matching 'X-CSRF-Token' request header.
+       If the session cookie is present and valid, and the request comes from the same local origin (127.0.0.1/localhost)
+       with Sec-Fetch-Site != "cross-site", authenticate the browser session seamlessly.
     """
     # 1. External header token check
     header_token = request.headers.get("X-API-Token")
@@ -126,15 +128,23 @@ def verify_api_token(request: Request):
                 status_code=401,
                 detail="Unauthorized: Missing or invalid session cookie."
             )
-        # Enforce CSRF token validation for cookie-authenticated browser requests
+        # Check CSRF token header if provided, or verify same-origin browser metadata
         csrf_cookie = request.cookies.get("artemis_csrf_token")
         csrf_header = request.headers.get("X-CSRF-Token")
-        if not csrf_cookie or not csrf_header or not hmac.compare_digest(csrf_cookie, csrf_header):
-            raise HTTPException(
-                status_code=403,
-                detail="Forbidden: Missing or invalid CSRF token."
-            )
-        return "cookie"
+        if csrf_cookie and csrf_header and hmac.compare_digest(csrf_cookie, csrf_header):
+            return "cookie"
+
+        sec_fetch_site = request.headers.get("sec-fetch-site")
+        origin = request.headers.get("origin")
+        if sec_fetch_site in ["same-origin", "same-site"] and origin:
+            parsed = urlparse(origin)
+            if parsed.netloc.lower() in ALLOWED_HOSTS:
+                return "cookie"
+
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Missing or invalid CSRF token."
+        )
 
     raise HTTPException(
         status_code=401,
