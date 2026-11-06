@@ -1,5 +1,6 @@
 import os
 import hmac
+import secrets
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -96,24 +97,49 @@ def verify_request_origin(request: Request):
 
 def verify_api_token(request: Request):
     """
-    Validates local API token for sensitive device-control actions.
-    Accepts token via 'X-API-Token' header, 'Authorization: Bearer <token>',
-    or session cookie 'artemis_session_token' set by the local server dashboard.
+    Authenticates requests for sensitive device-control operations.
+    Supports two secure authentication pathways:
+    1. External clients: Header authentication via 'X-API-Token' or 'Authorization: Bearer <token>' matching LOCAL_API_TOKEN.
+    2. Local dashboard: Cookie authentication via HttpOnly session cookie 'artemis_session_token' AND
+       double-submit CSRF token matching 'artemis_csrf_token' cookie against 'X-CSRF-Token' request header.
     """
-    token = request.headers.get("X-API-Token")
-    if not token:
+    # 1. External header token check
+    header_token = request.headers.get("X-API-Token")
+    if not header_token:
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
-            token = auth_header[7:].strip()
-    if not token:
-        token = request.cookies.get("artemis_session_token")
+            header_token = auth_header[7:].strip()
 
-    if not token or not hmac.compare_digest(token, LOCAL_API_TOKEN):
+    if header_token:
+        if hmac.compare_digest(header_token, LOCAL_API_TOKEN):
+            return "header"
         raise HTTPException(
             status_code=401,
             detail="Unauthorized: Missing or invalid API token."
         )
-    return token
+
+    # 2. Local browser session cookie + CSRF check
+    session_cookie = request.cookies.get("artemis_session_token")
+    if session_cookie:
+        if not hmac.compare_digest(session_cookie, LOCAL_API_TOKEN):
+            raise HTTPException(
+                status_code=401,
+                detail="Unauthorized: Missing or invalid session cookie."
+            )
+        # Enforce CSRF token validation for cookie-authenticated browser requests
+        csrf_cookie = request.cookies.get("artemis_csrf_token")
+        csrf_header = request.headers.get("X-CSRF-Token")
+        if not csrf_cookie or not csrf_header or not hmac.compare_digest(csrf_cookie, csrf_header):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Missing or invalid CSRF token."
+            )
+        return "cookie"
+
+    raise HTTPException(
+        status_code=401,
+        detail="Unauthorized: Missing or invalid API token."
+    )
 
 def verify_security(request: Request, _origin=Depends(verify_request_origin), _token=Depends(verify_api_token)):
     """Combined security dependency for sensitive device-control operations."""
@@ -129,28 +155,35 @@ controller = DeviceController()
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 @app.get("/")
-def serve_frontend_index():
+def serve_frontend_index(request: Request):
     index_file = FRONTEND_DIR / "index.html"
     if index_file.exists():
         response = FileResponse(str(index_file))
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-        # Set SameSite=Strict cookie for seamless authenticated local dashboard interaction
+        
+        # 1. Set HttpOnly=True, SameSite=Strict session cookie containing the authentication secret
         response.set_cookie(
             key="artemis_session_token",
             value=LOCAL_API_TOKEN,
+            httponly=True,
+            samesite="strict",
+            path="/"
+        )
+
+        # 2. Set double-submit CSRF token (HttpOnly=False so frontend JS can read and send in X-CSRF-Token header)
+        existing_csrf = request.cookies.get("artemis_csrf_token")
+        csrf_value = existing_csrf if existing_csrf else secrets.token_hex(24)
+        response.set_cookie(
+            key="artemis_csrf_token",
+            value=csrf_value,
             httponly=False,
             samesite="strict",
             path="/"
         )
         return response
     return JSONResponse(status_code=404, content={"message": "Frontend index.html not found"})
-
-@app.get("/api/auth/token", dependencies=[Depends(verify_request_origin)])
-def get_session_token():
-    """Provides local frontend with the session API token under strict same-origin check."""
-    return {"token": LOCAL_API_TOKEN}
 
 @app.get("/api/health")
 def health_check():

@@ -116,4 +116,63 @@ def test_bearer_authorization_header_allowed():
     assert response.status_code == 200
     assert response.json()["status"] == "success"
 
+# Security Test 7: Dashboard index sets HttpOnly session cookie and SameSite=Strict
+def test_dashboard_cookie_security_flags():
+    response = client.get("/")
+    assert response.status_code == 200
+    set_cookie_header = response.headers.get("set-cookie", "")
+    assert "artemis_session_token" in set_cookie_header
+    assert "httponly" in set_cookie_header.lower()
+    assert "samesite=strict" in set_cookie_header.lower()
+    assert "artemis_csrf_token" in set_cookie_header
+
+# Security Test 8: Removed endpoint /api/auth/token returns 404
+def test_auth_token_endpoint_removed():
+    response = client.get("/api/auth/token")
+    assert response.status_code == 404
+
+# Security Test 9: Valid cookie-authenticated request with CSRF token succeeds
+def test_cookie_auth_with_valid_csrf():
+    csrf_secret = "test_csrf_token_secret_12345"
+    client.cookies.set("artemis_session_token", LOCAL_API_TOKEN)
+    client.cookies.set("artemis_csrf_token", csrf_secret)
+    
+    response = client.post(
+        "/api/stop",
+        headers={
+            "Origin": "http://127.0.0.1:8000",
+            "X-CSRF-Token": csrf_secret
+        }
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"
+    # Clean client cookies after test
+    client.cookies.clear()
+
+# Security Test 10: Cookie auth with missing or mismatched CSRF token is rejected (403 Forbidden)
+def test_cookie_auth_missing_or_invalid_csrf_blocked():
+    client.cookies.set("artemis_session_token", LOCAL_API_TOKEN)
+    client.cookies.set("artemis_csrf_token", "real_csrf_cookie_val")
+
+    # Missing X-CSRF-Token header
+    res1 = client.post(
+        "/api/stop",
+        headers={"Origin": "http://127.0.0.1:8000"}
+    )
+    assert res1.status_code == 403
+    assert "csrf token" in res1.json()["detail"].lower()
+
+    # Mismatched X-CSRF-Token header
+    res2 = client.post(
+        "/api/stop",
+        headers={
+            "Origin": "http://127.0.0.1:8000",
+            "X-CSRF-Token": "attacker_fake_csrf"
+        }
+    )
+    assert res2.status_code == 403
+    assert "csrf token" in res2.json()["detail"].lower()
+    client.cookies.clear()
+
+
 

@@ -6,17 +6,17 @@ const executeBtn = document.getElementById('executeBtn');
 const stopBtn = document.getElementById('stopBtn');
 const clearBtn = document.getElementById('clearBtn');
 
-// Local session authentication helper
-function getLocalApiToken() {
-  const match = document.cookie.match(new RegExp('(^| )artemis_session_token=([^;]+)'));
+// Local CSRF protection helper for cookie-authenticated browser sessions
+function getCsrfToken() {
+  const match = document.cookie.match(new RegExp('(^| )artemis_csrf_token=([^;]+)'));
   return match ? match[2] : '';
 }
 
 function authHeaders(extraHeaders = {}) {
   const headers = { ...extraHeaders };
-  const token = getLocalApiToken();
-  if (token) {
-    headers['X-API-Token'] = token;
+  const csrf = getCsrfToken();
+  if (csrf) {
+    headers['X-CSRF-Token'] = csrf;
   }
   return headers;
 }

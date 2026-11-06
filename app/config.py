@@ -26,10 +26,6 @@ ADB_TIMEOUT_SECONDS = int(os.getenv("ADB_TIMEOUT_SECONDS", "25"))
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = int(os.getenv("PORT", "8000"))
 
-# Local API authentication token
-_configured_token = os.getenv("LOCAL_API_TOKEN", "").strip()
-LOCAL_API_TOKEN = _configured_token if _configured_token else secrets.token_hex(32)
-
 # Paths
 DATA_DIR = BASE_DIR / "data"
 SCREENSHOTS_DIR = DATA_DIR / "screenshots"
@@ -40,4 +36,28 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 
 for directory in [DATA_DIR, SCREENSHOTS_DIR, HISTORY_DIR, LOGS_DIR]:
     directory.mkdir(parents=True, exist_ok=True)
+
+# Local API authentication token
+_configured_token = os.getenv("LOCAL_API_TOKEN", "").strip()
+_token_file = DATA_DIR / ".local_token"
+
+if _configured_token:
+    LOCAL_API_TOKEN = _configured_token
+else:
+    # Persist auto-generated token in DATA_DIR across server restarts
+    if _token_file.exists():
+        try:
+            LOCAL_API_TOKEN = _token_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            LOCAL_API_TOKEN = ""
+    else:
+        LOCAL_API_TOKEN = ""
+
+    if not LOCAL_API_TOKEN:
+        LOCAL_API_TOKEN = secrets.token_hex(32)
+        try:
+            _token_file.write_text(LOCAL_API_TOKEN, encoding="utf-8")
+        except Exception:
+            pass
+
 

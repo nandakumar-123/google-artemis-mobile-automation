@@ -287,9 +287,9 @@ The repository contains automated unit and integration tests using `pytest`:
 .\.venv\Scripts\python.exe -m pytest tests/test_planner.py
 ```
 
-### Verified Test Results (26/26 Passed):
+### Verified Test Results (30/30 Passed):
 - `tests/test_adb.py`: **9 passed** (initialization, version parsing, connection check, already-paired avoidance, QR payload formats).
-- `tests/test_api.py`: **14 passed** (health endpoint, device status, history, stop signal, disconnect, device select, QR error checks, local API token validation, unauthorized missing/invalid token rejection, missing origin rejection, cross-site origin blocking, Bearer token authorization).
+- `tests/test_api.py`: **18 passed** (health endpoint, device status, history, stop signal, disconnect, device select, QR error checks, local API token validation, unauthorized missing/invalid token rejection, missing origin rejection, cross-site origin blocking, Bearer token authorization, HttpOnly and SameSite=Strict cookie flags, removal of raw token endpoint, valid CSRF cookie auth, and CSRF attack/mismatch rejection).
 - `tests/test_planner.py`: **3 passed** (YouTube multi-step planning, navigation commands, sensitive action confirmation guards).
 
 ---
@@ -297,8 +297,11 @@ The repository contains automated unit and integration tests using `pytest`:
 ## 🛡️ Security Considerations
 
 - **Secrets Management:** The repository `.gitignore` ensures that `.env`, session databases, and logs are never committed. Placeholders are maintained in `.env.example`.
-- **Local API Authentication:** Sensitive device-control endpoints (`/api/execute`, `/api/stop`, `/api/device/*`, `/api/confirmation`) require authentication via `LOCAL_API_TOKEN` transmitted securely via `X-API-Token` header, HTTP `Bearer` authorization, or local dashboard session cookies. If not explicitly specified in `.env`, the server generates a cryptographically random token upon startup.
-- **Strict Request-Origin Validation & CSRF Protection:** All state-changing device-control endpoints strictly require either `Origin` or `Referer` headers matching local authorized hosts (`127.0.0.1`, `localhost`). Requests lacking origin metadata or exhibiting cross-site properties (`sec-fetch-site: cross-site`) are blocked with HTTP 403 Forbidden.
+- **HttpOnly Cookie Authentication with CSRF Protection:** Dashboard requests authenticate via an `HttpOnly=True` and `SameSite=Strict` session cookie (`artemis_session_token`). In addition, cross-site request forgery protection is enforced using a double-submit CSRF cookie token (`artemis_csrf_token`) validated against the `X-CSRF-Token` header.
+- **Header Authentication for API Clients:** External API clients authenticate using standard HTTP headers (`X-API-Token: <token>` or `Authorization: Bearer <token>`).
+- **No Client-Exposed Raw Secret:** The `/api/auth/token` endpoint has been removed to prevent raw API keys or tokens from being exposed to frontend JavaScript.
+- **Persistent Token Generation:** When `LOCAL_API_TOKEN` is not explicitly defined in `.env`, a cryptographically random token is generated and persisted in `data/.local_token` to maintain session validity across server restarts.
+- **Strict Request-Origin Validation:** All state-changing device-control endpoints strictly require either `Origin` or `Referer` headers matching local authorized hosts (`127.0.0.1`, `localhost`). Requests lacking origin metadata or exhibiting cross-site properties (`sec-fetch-site: cross-site`) are blocked with HTTP 403 Forbidden.
 - **Strict Local Access Controls:** In addition to origin checks, CORS is restricted to local addresses (`127.0.0.1` and `localhost`).
 - **Command Sanitization:** Text entered through `TYPE_TEXT` is escaped to avoid shell injection in ADB commands.
 - **Sensitive Operations Guard:** The planner automatically detects sensitive keywords (e.g. *pay*, *delete*, *uninstall*, *format*, *factory reset*, *send message*) and prompts for interactive user confirmation before execution.
